@@ -1,6 +1,8 @@
 package com.kuyubu.news
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
@@ -9,7 +11,11 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.view.Gravity
 import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -35,10 +41,12 @@ class ArticleActivity : Activity() {
     private var chunkIndex = 0
     private var paused = false
     private var pendingStart = false
+    private var articleUrl = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val url = intent.getStringExtra(EXTRA_URL).orEmpty()
+        articleUrl = url
         val articleTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
 
         val root = LinearLayout(this).apply {
@@ -76,16 +84,76 @@ class ArticleActivity : Activity() {
             setPadding(0, dp(5), 0, 0)
         }
         header.addView(speechStatus)
+
+        val pageControls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, 0)
+        }
+        addControl(pageControls, "刷新网页") {
+            speechStatus.text = "正在重新加载网页…"
+            webView.reload()
+        }
+        addControl(pageControls, "用浏览器打开") {
+            try {
+                if (articleUrl.startsWith("https://") || articleUrl.startsWith("http://")) {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(articleUrl)))
+                } else {
+                    speechStatus.text = "新闻链接格式无效"
+                }
+            } catch (_: Exception) {
+                Toast.makeText(this, "没有可用的浏览器", Toast.LENGTH_SHORT).show()
+            }
+        }
+        header.addView(pageControls)
         root.addView(header)
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            settings.loadsImagesAutomatically = true
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             addJavascriptInterface(ArticleBridge(), "AndroidReader")
+            webChromeClient = object : WebChromeClient() {
+                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                    if (newProgress < 100 && articleText.isBlank()) {
+                        speechStatus.text = "网页加载中… $newProgress%"
+                    }
+                }
+            }
             webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val scheme = request?.url?.scheme?.lowercase(Locale.ROOT)
+                    return scheme != "https" && scheme != "http"
+                }
+
                 override fun onPageFinished(view: WebView?, pageUrl: String?) {
                     super.onPageFinished(view, pageUrl)
+                    if (articleText.isBlank()) speechStatus.text = "网页已打开，正在识别正文…"
                     extractArticleText()
+                }
+
+                override fun onReceivedError(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                    error: android.webkit.WebResourceError?
+                ) {
+                    super.onReceivedError(view, request, error)
+                    if (request?.isForMainFrame == true) {
+                        speechStatus.text = "网页打开失败：网络中断或网站拒绝访问。可刷新，或改用外部浏览器。"
+                    }
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                    errorResponse: android.webkit.WebResourceResponse?
+                ) {
+                    super.onReceivedHttpError(view, request, errorResponse)
+                    if (request?.isForMainFrame == true) {
+                        speechStatus.text = "网页返回错误（HTTP " + errorResponse?.statusCode + "），可尝试外部浏览器。"
+                    }
                 }
             }
         }
