@@ -240,7 +240,7 @@ class MainActivity : Activity() {
                 setTypeface(null, android.graphics.Typeface.BOLD)
                 setOnClickListener {
                     runCatching {
-                        startActivity(Intent(this, ArticleActivity::class.java).apply {
+                        startActivity(Intent(this@MainActivity, ArticleActivity::class.java).apply {
                             putExtra(ArticleActivity.EXTRA_URL, item.link)
                             putExtra(ArticleActivity.EXTRA_TITLE, item.title)
                         })
