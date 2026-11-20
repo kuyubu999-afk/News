@@ -30,7 +30,6 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var list: LinearLayout
     private lateinit var keyword: EditText
-    private var currentItems: List<NewsItem> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,7 +91,7 @@ class MainActivity : Activity() {
         keyword = EditText(this).apply {
             hint = "输入新闻关键词，例如：人工智能"
             textSize = 14f
-            singleLine = true
+            isSingleLine = true
             setPadding(dp(12), 0, dp(12), 0)
             setBackgroundColor(Color.WHITE)
         }
@@ -154,7 +153,6 @@ class MainActivity : Activity() {
                 }
                 val items = fetchFeed(feed)
                 mainHandler.post {
-                    currentItems = items
                     renderItems(items)
                     ticker.text = if (items.isEmpty()) "暂时没有找到相关新闻" else
                         items.take(8).joinToString("     •     ") { it.title }
@@ -190,18 +188,16 @@ class MainActivity : Activity() {
                 var date = ""
                 while (event != XmlPullParser.END_DOCUMENT && result.size < 40) {
                     when (event) {
-                        XmlPullParser.START_TAG -> {
-                            when (parser.name) {
-                                "item" -> {
-                                    inItem = true
-                                    title = ""
-                                    link = ""
-                                    date = ""
-                                }
-                                "title" -> if (inItem) title = parser.nextText()
-                                "link" -> if (inItem) link = parser.nextText()
-                                "pubDate" -> if (inItem) date = parser.nextText()
+                        XmlPullParser.START_TAG -> when (parser.name) {
+                            "item" -> {
+                                inItem = true
+                                title = ""
+                                link = ""
+                                date = ""
                             }
+                            "title" -> if (inItem) title = parser.nextText()
+                            "link" -> if (inItem) link = parser.nextText()
+                            "pubDate" -> if (inItem) date = parser.nextText()
                         }
                         XmlPullParser.END_TAG -> if (parser.name == "item" && inItem) {
                             if (title.isNotBlank() && link.isNotBlank()) {
@@ -237,7 +233,7 @@ class MainActivity : Activity() {
                 setPadding(dp(14), dp(12), dp(14), dp(12))
                 setBackgroundColor(Color.WHITE)
             }
-            val title = TextView(this).apply {
+            val titleView = TextView(this).apply {
                 text = "${index + 1}. ${item.title}"
                 textSize = 16f
                 setTextColor(Color.rgb(30, 45, 65))
@@ -248,15 +244,15 @@ class MainActivity : Activity() {
                     }
                 }
             }
-            card.addView(title)
+            card.addView(titleView)
             if (item.date.isNotBlank()) {
-                val date = TextView(this).apply {
+                val dateView = TextView(this).apply {
                     text = item.date
                     textSize = 11f
                     setTextColor(Color.GRAY)
                     setPadding(0, dp(7), 0, 0)
                 }
-                card.addView(date)
+                card.addView(dateView)
             }
             list.addView(card, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
